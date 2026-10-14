@@ -48,9 +48,28 @@ default_branch="$(curl -fsSL https://api.github.com/repos/basecamp/omarchy | \
 echo "Fetching omarchy-base.packages from basecamp/omarchy@$default_branch" >&2
 curl -fsSL "https://raw.githubusercontent.com/basecamp/omarchy/$default_branch/install/omarchy-base.packages" \
   -o "$OUT_DIR/omarchy-base.packages.fetched"
+[[ -s "$OUT_DIR/omarchy-base.packages.fetched" ]] || {
+  echo "error: failed to fetch omarchy-base.packages from basecamp/omarchy@$default_branch" >&2
+  exit 1
+}
+
+available_packages="$(pacman -Slq 2>/dev/null || true)"
 
 {
-  grep -vE '^\s*(#|$)' "$OUT_DIR/omarchy-base.packages.fetched"
+  if [[ -n "$available_packages" ]]; then
+    while IFS= read -r spec; do
+      [[ -z "$spec" ]] && continue
+      package_name="${spec%%=*}"
+      if ! grep -Fxq -- "$package_name" <<< "$available_packages"; then
+        echo "Skipping unavailable package from omarchy-base.packages: $spec" >&2
+        continue
+      fi
+      printf '%s\n' "$spec"
+    done < <(grep -vE '^\s*(#|$)' "$OUT_DIR/omarchy-base.packages.fetched")
+  else
+    grep -vE '^\s*(#|$)' "$OUT_DIR/omarchy-base.packages.fetched"
+  fi
+
   echo "omarchy=$OMARCHY_VERSION"
   echo "base"
   echo "base-devel"

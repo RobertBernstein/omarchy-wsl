@@ -104,6 +104,12 @@ source "$REPO/packages/OMARCHY_KEYRING_PIN"
 log "Fetching pinned omarchy-keyring package ($FILENAME)"
 curl -fsSL "https://pkgs.omarchy.org/stable/x86_64/$FILENAME" -o "/tmp/$FILENAME"
 echo "$SHA256  /tmp/$FILENAME" | sha256sum -c -
+
+# Sync repo metadata before installing the bootstrap keyring so pacman doesn't
+# warn about missing database files for repo entries it hasn't downloaded yet.
+log "Refreshing package database metadata before installing omarchy-keyring"
+pacman -Sy --noconfirm
+
 log "Hash verified. Installing omarchy-keyring (its own scriptlet trusts the omarchy key)"
 pacman -U --noconfirm "/tmp/$FILENAME"
 rm -f "/tmp/$FILENAME"
@@ -120,6 +126,10 @@ log "Resolving package manifest"
 bash "$REPO/packages/resolve-packages.sh" "$SCRATCH"
 
 mkdir -p "$TARGET"
+if ! mountpoint -q "$TARGET"; then
+  log "Mounting tmpfs at $TARGET for pacstrap staging"
+  mount -t tmpfs tmpfs "$TARGET"
+fi
 log "pacstrap: installing $(wc -l < "$SCRATCH/manifest.txt") package specs into $TARGET"
 pacstrap -c "$TARGET" $(cat "$SCRATCH/manifest.txt")
 
